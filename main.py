@@ -132,9 +132,9 @@ def main():
     while True:
         print("Checking for mails for another %s messages" % MAX_RESULTS)
         search_string = (
-            "unsubscribe after:%s before:%s" % (after, before)
+            "after:%s before:%s" % (after, before)
             if before
-            else "unsubscribe after:%s" % after
+            else "after:%s" % after
         )
         if extra_search_param:
             search_string += ' (%s)' % extra_search_param
@@ -160,6 +160,7 @@ def main():
 
     print("We found %s mails" % (len(messages)))
 
+    messages_found = 0;
     for message in tqdm(messages):
         msg = (
             service.users()
@@ -232,33 +233,34 @@ def main():
                 if isinstance(body_message, str)
                 else body_message.decode("UTF8")
             )
-
-        if sender_email not in email_data:
-            email_data[sender_email] = {
-                "sender_email": sender_email,
-                "sender_name": sender_name,
-                "id": message["id"],
-                "title": email_title,
-                "last_email_date": last_email_date,
-                "unsubscribe_link": unsubscribe_link,
-                "unsubscribe_email": unsubscribe_email,
-                "count": 1,
-            }
-        else:
-            email_data[sender_email]["count"] += 1
-            if last_email_date > email_data[sender_email]["last_email_date"]:
-                email_data[sender_email]["id"]: message["id"]
-                email_data[sender_email]["sender_name"]: message[
-                    "sender_name"
-                ]  # some place like LinkedIn change this
-                email_data[sender_email]["title"] = email_title
-                email_data[sender_email]["last_email_date"] = last_email_date
-                email_data[sender_email]["unsubscribe_link"] = unsubscribe_link
-                email_data[sender_email]["unsubscribe_email"] = unsubscribe_email
-                email_data[sender_email]["google_search"] = sender_email
+        if unsubscribe_link or unsubscribe_email:
+            messages_found += 1
+            if sender_email not in email_data:
+                email_data[sender_email] = {
+                    "sender_email": sender_email,
+                    "sender_name": sender_name,
+                    "id": message["id"],
+                    "title": email_title,
+                    "last_email_date": last_email_date,
+                    "unsubscribe_link": unsubscribe_link,
+                    "unsubscribe_email": unsubscribe_email,
+                    "count": 1,
+                }
+            else:
+                email_data[sender_email]["count"] += 1
+                if last_email_date > email_data[sender_email]["last_email_date"]:
+                    email_data[sender_email]["id"]: message["id"]
+                    email_data[sender_email]["sender_name"]: message[
+                        "sender_name"
+                    ]  # some place like LinkedIn change this
+                    email_data[sender_email]["title"] = email_title
+                    email_data[sender_email]["last_email_date"] = last_email_date
+                    email_data[sender_email]["unsubscribe_link"] = unsubscribe_link
+                    email_data[sender_email]["unsubscribe_email"] = unsubscribe_email
+                    email_data[sender_email]["google_search"] = sender_email
 
     render_template(
-        {"groups": list(email_data.values()), "total_messages": len(messages)},
+        {"groups": list(email_data.values()), "total_messages": messages_found},
         output_file,
     )
 
