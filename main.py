@@ -31,29 +31,15 @@ def extract_unsubscribe_info_from_header(header_value):
     return url, email
 
 
-stats = {
-    'link': 0,
-    'href': 0,
-    'child': 0,
-    'last_chance_parent': 0,
-    'last_chance_sibling': 0,
-    'last_chance_family': 0,
-
-}
-
-
 def extract_unsubscribe_link(email_body):
     soup = BeautifulSoup(email_body, "html.parser")
     for link in soup.find_all("a", string=re.compile(r"unsubscribe", re.IGNORECASE)):
-        stats['link'] += 1
         return link.get("href")
     for link in soup.find_all("a", href=re.compile(r"unsubscribe", re.IGNORECASE)):
-        stats['href'] += 1
         return link.get("href")
     for el in soup.find_all(True, string=re.compile(r"unsubscribe", re.IGNORECASE)):
         link = el.find_parent("a")
         if link:
-            stats['child'] += 1
             return link.get("href")
     """
         <p><span><a href="https://...">CLICK HERE</a></span> TO UNSUBSCRIBE</p>
@@ -67,15 +53,12 @@ def extract_unsubscribe_link(email_body):
         last_chance = last_chance[-1]
         link = last_chance.find_parent("a")
         if link:
-            stats['last_chance_parent'] += 1
             return link.get("href")
         link = last_chance.find("a")
         if link:
-            stats['last_chance_sibling'] += 1
             return link.get("href")
         link = last_chance.parent.find("a")
         if link:
-            stats['last_chance_family'] += 1
             return link.get("href")
     return ""
 
@@ -278,9 +261,6 @@ def main():
         {"groups": list(email_data.values()), "total_messages": len(messages)},
         output_file,
     )
-
-    print(stats)
-
 
 if __name__ == "__main__":
     main()
