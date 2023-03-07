@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Unsubscribe --</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.2.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.3/css/dataTables.bootstrap5.min.css">
+    <style>
+        :root {
+            --bs-body-font-size: .8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="pb-3 mb-4 border-bottom">
+          <a href="/" class="d-flex align-items-center text-dark text-decoration-none">
+            <span class="fs-4">Unsubscribe --</span>
+          </a>
+        </header>
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <p>
+                We do not have a list of all unsubscribe emails. Instead, our app accesses your email and flags emails that contain a link to an unsubscribe action. We group them by sender, after that it is a manual process.
+            </p>
+            <p>
+                If a message contains the word "unsubscribe", it will show up in the list. So false positives may occur. You will most likely see this in senders with low counts.
+            </p>
+            <p>
+               After unsubscribe, you can use the link to a search that make easy to delete all emails. If you choose to keep the emails, they will be shown in the results next time you execute the script. But you can use labels and <code>--extra-search-params</code> to exclude them
+            </p>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+
+        <p><strong>{{ context.total_messages }}</strong> emails founded. From <strong>{{ context.groups|length }}</strong> different senders.</p>
+
+        <table id="myTable" class="table table-striped table-bordered table-hover">
+            <thead>
+                <tr>
+                    <th>Count</th>
+                    <th>Sender</th>
+                    <th>Title</th>
+                    <th>Last email</th>
+                    <th>Unsubscribe</th>
+                    <th>See emails</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in context.groups %}
+                <tr>
+                    <td>{{row['count']}}</td>
+                    <td><strong>{{row['sender_name']}}</strong><br /><em>{{row['sender_email']}}</em></td>
+                    <td><a href="https://mail.google.com/mail/u/0/#inbox/{{row['id']}}" target="_blank">{{row['title']}}</a></td>
+                    <td>{{row['last_email_date']}}</td>
+                    <td>
+                        {% if row['unsubscribe_link'] %}<a href="{{row['unsubscribe_link']}}" target="_blank">Link</a>{% endif %}
+                        {%  if row['unsubscribe_link'] and row['unsubscribe_email'] %}<br />{% endif %}
+                        {% if row['unsubscribe_email'] %}<a href="{{row['unsubscribe_email']}}" target="_blank">Email</a>{% endif %}
+                        {% if not row['unsubscribe_link'] and not row['unsubscribe_email'] %} - {% endif %}
+                    </td>
+                    <td><a href="https://mail.google.com/mail/u/0/#search/from%3A({{row['sender_email']}})" target="_blank">GMail search</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.3/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.3/js/dataTables.bootstrap5.min.js"></script>
+    <script>
+    $(document).ready(function() {
+      $('#myTable').DataTable({
+        'order': [[ 0, 'desc' ]],
+        'columnDefs': [
+            {
+               'targets': [ 5 ],
+                'orderable': false
+              },
+              { "width": "30%", "targets": [1,2] },
+              { "width": "0%", "targets": [0] }
+          ]
+        });
+    })
+    </script>
+</body>
+</html>
