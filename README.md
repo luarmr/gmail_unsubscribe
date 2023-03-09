@@ -25,7 +25,7 @@ To install the necessary requirements, you can either use the `requirement.txt` 
 
 
 ```
-⚡ pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib beautifulsoup4 jinja2 tqdm
+⚡ pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib beautifulsoup4 jinja2 tqdm retrying
 ```
 
 ## Execution

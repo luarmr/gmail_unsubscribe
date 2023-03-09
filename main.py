@@ -4,6 +4,7 @@ import argparse
 import base64
 import datetime
 import re
+import retrying
 
 from bs4 import BeautifulSoup
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -32,7 +33,11 @@ def extract_unsubscribe_info_from_header(header_value):
 
 
 def extract_unsubscribe_link(email_body):
-    soup = BeautifulSoup(email_body, "html.parser")
+    try:
+        soup = BeautifulSoup(email_body, "html.parser")
+    except Exception:
+        # TODO: investigate the very rare AssertionError: unknown status keyword 'raw' in marked section
+        return ""
     for link in soup.find_all("a", string=re.compile(r"unsubscribe", re.IGNORECASE)):
         return link.get("href")
     for link in soup.find_all("a", href=re.compile(r"unsubscribe", re.IGNORECASE)):
@@ -72,7 +77,7 @@ def extract_name_and_email(sender):
         email = match.group(2)  # get the second group (email) from the match
         return email, name
     else:
-        return "", sender
+        return sender, ""
 
 
 def render_template(context, filename):
@@ -84,6 +89,14 @@ def render_template(context, filename):
     with open(filename, "w") as f:
         f.write(html_table)
 
+@retrying.retry(wait_fixed=1000, stop_max_attempt_number=3)
+def get_message(service, user_id, message_id):
+    msg = service.users().messages().get(
+        userId=user_id,
+        id=message_id,
+        format='full'
+    ).execute()
+    return msg
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -130,7 +143,6 @@ def main():
 
     next_page_token = None
     while True:
-        print("Checking for mails for another %s messages" % MAX_RESULTS)
         search_string = (
             "after:%s before:%s" % (after, before)
             if before
@@ -151,6 +163,7 @@ def main():
         )
         messages.extend(results.get("messages", []))
         next_page_token = results.get("nextPageToken")
+        print("Found %s messages \r" % len(messages), end="")
         if not next_page_token:
             break
 
@@ -160,14 +173,8 @@ def main():
 
     print("We found %s mails" % (len(messages)))
 
-    messages_found = 0;
     for message in tqdm(messages):
-        msg = (
-            service.users()
-            .messages()
-            .get(userId=USER_ID, id=message["id"], format="full")
-            .execute()
-        )
+        msg = get_message(service, USER_ID, message["id"])
         payload = msg["payload"]
         headers = payload["headers"]
 
@@ -191,50 +198,57 @@ def main():
             elif header["name"] == "From":
                 (sender_email, sender_name) = extract_name_and_email(header["value"])
 
-        if unsubscribe_link == "":
-            body_message = ""
-            parts = payload.get("parts")
-            if parts:
-                for part in parts:
-                    body = part.get("body")
-                    data = body.get("data")
-                    mime_type = part.get("mimeType")
+        if sender_email in email_data:
+            email_data[sender_email]["count"] += 1
 
-                    if mime_type == "multipart/alternative":
-                        sub_parts = part.get("parts")
-                        for p in sub_parts:
-                            sub_mime_type = p.get("mimeType")
-                            if sub_mime_type == "text/html":
-                                data = p.get("body").get("data")
+        if sender_email not in email_data or last_email_date > email_data[sender_email]["last_email_date"]:
+            if unsubscribe_link == "":
+                body_message = ""
+                parts = payload.get("parts")
+                if parts:
+                    for part in parts:
+                        body = part.get("body")
+                        data = body.get("data")
+                        mime_type = part.get("mimeType")
+
+                        if mime_type == "multipart/alternative":
+                            sub_parts = part.get("parts")
+                            for p in sub_parts:
+                                sub_mime_type = p.get("mimeType")
+                                if sub_mime_type == "text/html":
+                                    data = p.get("body").get("data")
+                                    if data:
+                                        body_message = base64.urlsafe_b64decode(data)
+                                        break
+                        if mime_type == "multipart/related":
+                            sub_parts = part.get("parts")
+                            for p in sub_parts:
+                                body = p.get("body")
+                                data = body.get("data")
+                                mime_type = p.get("mimeType")
+                                # let's exclude this case since we use soap
+                                # if mimeType == 'text/plain':
+                                #   if data:
+                                #       body_message = base64.urlsafe_b64decode(data)
+                                if mime_type == "text/html":
+                                    if data:
+                                        body_message = base64.urlsafe_b64decode(data)
+                        # let's exclude this case since we use soap
+                        # elif mimeType == 'text/plain':
+                        #     if data:
+                        #       body_message = base64.urlsafe_b64decode(data)
+                        elif mime_type == "text/html":
+                            if data:
                                 body_message = base64.urlsafe_b64decode(data)
-                                break
-                    if mime_type == "multipart/related":
-                        sub_parts = part.get("parts")
-                        for p in sub_parts:
-                            body = p.get("body")
-                            data = body.get("data")
-                            mime_type = p.get("mimeType")
-                            # let's exclude this case since we use soap
-                            # if mimeType == 'text/plain':
-                            #     body_message = base64.urlsafe_b64decode(data)
-                            if mime_type == "text/html":
-                                body_message = base64.urlsafe_b64decode(data)
-                    # let's exclude this case since we use soap
-                    # elif mimeType == 'text/plain':
-                    #     body_message = base64.urlsafe_b64decode(data)
-                    elif mime_type == "text/html":
-                        body_message = base64.urlsafe_b64decode(data)
 
-            if not body_message and "body" in payload and "data" in payload["body"]:
-                body_message = base64.urlsafe_b64decode(payload["body"]["data"])
+                if not body_message and "body" in payload and "data" in payload["body"]:
+                    body_message = base64.urlsafe_b64decode(payload["body"]["data"])
 
-            unsubscribe_link = extract_unsubscribe_link(
-                body_message
-                if isinstance(body_message, str)
-                else body_message.decode("UTF8")
-            )
-        if unsubscribe_link or unsubscribe_email:
-            messages_found += 1
+                unsubscribe_link = extract_unsubscribe_link(
+                    body_message
+                    if isinstance(body_message, str)
+                    else body_message.decode("UTF8")
+                )
             if sender_email not in email_data:
                 email_data[sender_email] = {
                     "sender_email": sender_email,
@@ -247,7 +261,6 @@ def main():
                     "count": 1,
                 }
             else:
-                email_data[sender_email]["count"] += 1
                 if last_email_date > email_data[sender_email]["last_email_date"]:
                     email_data[sender_email]["id"]: message["id"]
                     email_data[sender_email]["sender_name"]: message[
@@ -260,7 +273,7 @@ def main():
                     email_data[sender_email]["google_search"] = sender_email
 
     render_template(
-        {"groups": list(email_data.values()), "total_messages": messages_found},
+        {"groups": list(email_data.values()), "total_messages": len(messages)},
         output_file,
     )
 
