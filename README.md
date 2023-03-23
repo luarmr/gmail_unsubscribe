@@ -1,4 +1,8 @@
-# gmail_unsubscribe
+
+
+# <img src="https://raw.githubusercontent.com/luarmr/gmail_unsubscribe/main/assets/logo.png"  width="80" style="vertical-align:middle" alt="" /> gmail_unsubscribe
+
+
 This tool enables you to easily unsubscribe from email lists. The script works by accessing your email account and identifying emails that contain links or headers for unsubscribing. It then groups these emails by sender and generates a convenient HTML page that allows you to quickly unsubscribe using those links. With this tool, you can easily declutter your inbox and take control of your email subscriptions.
 
 Script
@@ -50,6 +54,5 @@ recommend using a one-month window for the "after" parameter. This will enable y
 ```
 ⚡ ./main.py --after 11/11/2022 --credentials credentials.json --output=output_2.html
 ```
-
 
 
